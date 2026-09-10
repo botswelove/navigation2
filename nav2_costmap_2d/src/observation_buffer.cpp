@@ -217,7 +217,7 @@ bool ObservationBuffer::isCurrent() const
 
   bool current = (clock_->now() - last_updated_) <=
     expected_update_rate_;
-  if (!current) {
+  if (!current && !stale_logged_) {
     RCLCPP_WARN(
       logger_,
       "The %s observation buffer has not been updated for %.2f seconds, "
@@ -225,7 +225,10 @@ bool ObservationBuffer::isCurrent() const
       topic_name_.c_str(),
       (clock_->now() - last_updated_).seconds(),
       expected_update_rate_.seconds());
+  } else if (current && stale_logged_) {
+    RCLCPP_INFO(logger_, "The %s observation buffer is current again.", topic_name_.c_str());
   }
+  stale_logged_ = !current;
   return current;
 }
 

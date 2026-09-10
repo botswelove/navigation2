@@ -144,6 +144,8 @@ private:
   const rclcpp::Duration observation_keep_time_;
   const rclcpp::Duration expected_update_rate_;
   rclcpp::Time last_updated_;
+  // Per-buffer logging state only; never changes the freshness verdict.
+  mutable bool stale_logged_{false};
   std::string global_frame_;
   std::string sensor_frame_;
   std::list<Observation> observation_list_;
