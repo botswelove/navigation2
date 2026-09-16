@@ -169,13 +169,14 @@ typename AnalyticExpansion<NodeT>::AnalyticExpansionNodes AnalyticExpansion<Node
   const NodeGetter & node_getter,
   const ompl::base::StateSpacePtr & state_space)
 {
+  const Coordinates goal_coordinates = goal->pose;
   static ompl::base::ScopedState<> from(state_space), to(state_space), s(state_space);
   from[0] = node->pose.x;
   from[1] = node->pose.y;
   from[2] = node->motion_table.getAngleFromBin(node->pose.theta);
-  to[0] = goal->pose.x;
-  to[1] = goal->pose.y;
-  to[2] = node->motion_table.getAngleFromBin(goal->pose.theta);
+  to[0] = goal_coordinates.x;
+  to[1] = goal_coordinates.y;
+  to[2] = node->motion_table.getAngleFromBin(goal_coordinates.theta);
 
   float d = state_space->distance(from(), to());
 
@@ -195,7 +196,7 @@ typename AnalyticExpansion<NodeT>::AnalyticExpansionNodes AnalyticExpansion<Node
   AnalyticExpansionNodes possible_nodes;
   // When "from" and "to" are zero or one cell away,
   // num_intervals == 0
-  possible_nodes.reserve(num_intervals);  // We won't store this node or the goal
+  possible_nodes.reserve(num_intervals);  // Includes the goal for collision checking
   std::vector<double> reals;
   double theta;
 
@@ -209,24 +210,31 @@ typename AnalyticExpansion<NodeT>::AnalyticExpansionNodes AnalyticExpansion<Node
   std::vector<float> node_costs;
   node_costs.reserve(num_intervals);
 
-  // Check intermediary poses (non-goal, non-start)
+  // Check intermediate poses and the goal, excluding the start.
   for (float i = 1; i <= num_intervals; i++) {
-    state_space->interpolate(from(), to(), i / num_intervals, s());
-    reals = s.reals();
-    // Make sure in range [0, 2PI)
-    theta = (reals[2] < 0.0) ? (reals[2] + 2.0 * M_PI) : reals[2];
-    theta = (theta > 2.0 * M_PI) ? (theta - 2.0 * M_PI) : theta;
-    angle = node->motion_table.getAngle(theta);
+    if (i == num_intervals) {
+      // Preserve the exact goal: the angle round-trip can truncate to a neighboring bin
+      // and otherwise add a second terminal node at the same XY. Still check validity below.
+      proposed_coordinates = goal_coordinates;
+      index = goal->getIndex();
+    } else {
+      state_space->interpolate(from(), to(), i / num_intervals, s());
+      reals = s.reals();
+      // Make sure in range [0, 2PI)
+      theta = (reals[2] < 0.0) ? (reals[2] + 2.0 * M_PI) : reals[2];
+      theta = (theta > 2.0 * M_PI) ? (theta - 2.0 * M_PI) : theta;
+      angle = node->motion_table.getAngle(theta);
 
-    // Turn the pose into a node, and check if it is valid
-    index = NodeT::getIndex(
-      static_cast<unsigned int>(reals[0]),
-      static_cast<unsigned int>(reals[1]),
-      static_cast<unsigned int>(angle));
+      // Turn the pose into a node, and check if it is valid
+      index = NodeT::getIndex(
+        static_cast<unsigned int>(reals[0]),
+        static_cast<unsigned int>(reals[1]),
+        static_cast<unsigned int>(angle));
+      proposed_coordinates = {static_cast<float>(reals[0]), static_cast<float>(reals[1]), angle};
+    }
     // Get the node from the graph
     if (node_getter(index, next)) {
       Coordinates initial_node_coords = next->pose;
-      proposed_coordinates = {static_cast<float>(reals[0]), static_cast<float>(reals[1]), angle};
       next->setPose(proposed_coordinates);
       if (next->isNodeValid(_traverse_unknown, _collision_checker) && next != prev) {
         // Save the node, and its previous coordinates in case we need to abort
