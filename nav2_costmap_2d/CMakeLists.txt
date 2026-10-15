@@ -176,7 +176,7 @@ install(DIRECTORY include/
   DESTINATION include/${PROJECT_NAME}
 )
 
-if(BUILD_TESTING)
+if(BUILD_TESTING AND NAV2_BWL_BUILD_TESTS)
   find_package(ament_lint_auto REQUIRED)
   # the following line skips the linter which checks for copyrights
   set(ament_cmake_copyright_FOUND TRUE)
